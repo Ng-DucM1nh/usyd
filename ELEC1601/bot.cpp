@@ -71,21 +71,21 @@ void loop()
   */
 
   int MDetect = irDetect(0, 38000);
-  int LDetect = irDetect(1, 41700);
-  int RDetect = irDetect(2, 43100);
+  int LDetect = irDetect(1, 39400);
+  int RDetect = irDetect(2, 42100);
   if (LDetect == 1 || RDetect == 1){
     // front wall detected
-    int l = irDetect(1, 41700);
-    int r = irDetect(2, 43100);
+    int l = irDetect(1, 39400);
+    int r = irDetect(2, 42100);
     if (r == 1 && l == 0){
       // right wall is closer
       Serial.println("right wall closer");
-      Lturn(100);
+      Lturn(10);
     }
     else if (l == 1 && r == 0){
       // left wall is closer
       Serial.println("left wall closer");
-      Rturn(100);
+      Rturn(10);
     }
   }
   else{
