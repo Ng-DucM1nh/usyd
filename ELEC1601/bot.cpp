@@ -71,24 +71,18 @@ void loop()
   */
 
   int MDetect = irDetect(0, 38000);
-  int LDetect = irDetect(1, 38000);
-  int RDetect = irDetect(2, 38000);
+  int LDetect = irDetect(1, 45000);
+  int RDetect = irDetect(2, 43100);
   if (MDetect == 1 && LDetect == 1 && RDetect == 1){
     // front wall detected
-    int countLeft = 0;
-    for (long leftFreq = 38000; leftFreq <= 45000; leftFreq += 100){
-      countLeft += irDetect(1, leftFreq);
-    }
-    int countRight = 0;
-    for (long rightFreq = 38200; rightFreq <= 43100; rightFreq += 100){
-      countRight += irDetect(2, rightFreq);
-    }
-    if (countLeft < countRight){
+    int l = irDetect(1, 45000);
+    int r = irDetect(2, 43100);
+    if (r == 1 && l == 0){
       // right wall is closer
       Serial.println("right wall closer");
       Lturn(500);
     }
-    else if (countLeft > countRight){
+    else if (l == 1 && r == 0){
       // left wall is closer
       Serial.println("left wall closer");
       Rturn(500);
