@@ -20,10 +20,19 @@ Servo Lservo, Rservo;
 
 void setup()
 {
-    delay(3000);
-    Serial.begin(9600);
-    Lservo.attach(13);     
-    Rservo.attach(12);
+  pinMode(LirReceiverPin, INPUT);
+  pinMode(RirReceiverPin, INPUT);
+  pinMode(MirReceiverPin, INPUT);
+  pinMode(LirLedPin, OUTPUT);
+  pinMode(RirLedPin, OUTPUT);
+  pinMode(MirLedPin, OUTPUT);
+  pinMode(LredLedPin, OUTPUT);
+  pinMode(RredLedPin, OUTPUT);
+  pinMode(MredLedPin, OUTPUT);
+  delay(3000);
+  Serial.begin(9600);
+  Lservo.attach(13);     
+  Rservo.attach(12);
 }
 
 void loop()
@@ -52,26 +61,60 @@ void loop()
   delay(100);
   */
 
-  if (irDistance(1) != irDistance(2)){
-    Backward();
+  /*
+  Serial.print("mid ");
+  Serial.print(irDetect(0, 38000));
+  Serial.print(" left ");
+  Serial.print(irDetect(1, 38000));
+  Serial.print(" right ");
+  Serial.println(irDetect(2, 38000));
+  */
+
+  int MDetect = irDetect(0, 38000);
+  int LDetect = irDetect(1, 38000);
+  int RDetect = irDetect(2, 38000);
+  if (MDetect == 1 && LDetect == 1 && RDetect == 1){
+    // front wall detected
+    int countLeft = 0;
+    for (long leftFreq = 38000; leftFreq <= 45000; leftFreq += 100){
+      countLeft += irDetect(1, leftFreq);
+    }
+    int countRight = 0;
+    for (long rightFreq = 38200; rightFreq <= 43100; rightFreq += 100){
+      countRight += irDetect(2, rightFreq);
+    }
+    if (countLeft < countRight){
+      // right wall is closer
+      Serial.println("right wall closer");
+      Lturn(500);
+    }
+    else if (countLeft > countRight){
+      // left wall is closer
+      Serial.println("left wall closer");
+      Rturn(500);
+    }
   }
   else{
     Forward();
   }
+  digitalWrite(LredLedPin, LOW);
+  digitalWrite(RredLedPin, LOW);
+  digitalWrite(MredLedPin, LOW);
 }
 
-void Rturn90()
+// time = 900 -> turn 90 degree
+void Rturn(int time)
 {
   Rservo.writeMicroseconds(1495);
   Lservo.writeMicroseconds(1680);
-  delay(900);
+  delay(time);
 }
 
-void Lturn90()
+void Lturn(int time)
 {
   Rservo.writeMicroseconds(1340);
   Lservo.writeMicroseconds(1490);
-  delay(900);
+  delay(time);
 }
 
 void Forward()
@@ -125,24 +168,31 @@ int irDetect(int side, long frequency) // side = 0 -> mid, side = 1 -> left, sid
   }
   int irLedPin = 0;
   int irReceiverPin = 0;
+  int redLedPin = 0;
   if (side == 0){
     irLedPin = MirLedPin;
     irReceiverPin = MirReceiverPin;
+    redLedPin = MredLedPin;
   }
   else if (side == 1){
     irLedPin = LirLedPin;
     irReceiverPin = LirReceiverPin;
+    redLedPin = LredLedPin;
   }
   else{
     irLedPin = RirLedPin;
     irReceiverPin = RirReceiverPin;
+    redLedPin = RredLedPin;
   }
   tone(irLedPin, frequency);                 // Turn on the IR LED square wave
   delay(1);                                  // Wait 1 ms
   noTone(irLedPin);                          // Turn off the IR LED
   int ir = digitalRead(irReceiverPin);       // IR receiver -> ir variable
   delay(1);                                  // Down time before recheck
-  return ir;                                 // Return 0 detect, 1 no detect
+  if (ir == 0){
+    digitalWrite(redLedPin, HIGH);
+  }
+  return 1 - ir;                                 // Return 1 detect, 0 no detect
 }
 
 int irDistance(int side) // side = 0 -> mid, side = 1 -> left, side = 2 -> right
