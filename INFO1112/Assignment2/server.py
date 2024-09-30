@@ -6,10 +6,59 @@ import json
 import bcrypt
 
 
-server_port = 0
-user_database_path = ""
-user_database = []
-existing_username = set()
+class Room:
+
+    def __init__(self, room_name: str):
+        self.room_name = room_name
+        self.p1_username = ""
+        self.p2_username = ""
+        self.p1_client_socket = None
+        self.p2_client_socket = None
+        self.viewers_client_socket = []
+
+    def has_player1(self) -> bool:
+        return self.p1_client_socket is not None
+
+    def has_player2(self) -> bool:
+        return self.p2_client_socket is not None
+
+    def get_player1(self) -> tuple[str, socket.socket]:
+        return self.p1_username, self.p1_client_socket
+
+    def get_player2(self) -> tuple[str, socket.socket]:
+        return self.p2_username, self.p2_client_socket
+
+    def get_viewers(self) -> list[socket.socket]:
+        return self.viewers_client_socket
+
+    def add_player(self, username: str, client_socket: socket.socket) -> bool:
+        if not self.has_player1():
+            self.p1_username = username
+            self.p1_client_socket = client_socket
+            return False
+        self.p2_username = username
+        self.p2_client_socket = client_socket
+        return True
+
+    def add_viewer(self, client_socket: socket.socket) -> None:
+        self.viewers_client_socket.append(client_socket)
+
+
+pending_rooms: dict[str, Room] = {}
+full_rooms: dict[str, Room] = {}
+
+
+def begin_protocol(room: Room) -> None:
+    p1_username, p1_client_socket = room.get_player1()
+    p2_username, p2_client_socket = room.get_player2()
+    p1_client_socket.sendall(f"BEGIN:{p1_username}:{p2_username}".encode())
+    p2_client_socket.sendall(f"BEGIN:{p1_username}:{p2_username}".encode())
+
+
+server_port: int = 0
+user_database_path: str = ""
+user_database: list[dict] = []
+existing_username: set = set()
 
 
 def config(args: list[str]) -> None:
@@ -85,7 +134,7 @@ def remove_client_socket(client_socket: socket.socket) -> None:
     print(f"disconnection from {clients[client_socket]}")
     sockets_list.remove(client_socket)
     del clients[client_socket]
-    auth_clients.discard(client_socket)
+    auth_clients.pop(client_socket, None)
 
 
 def login_protocol(client_socket: socket.socket, data: str) -> None:
@@ -100,7 +149,7 @@ def login_protocol(client_socket: socket.socket, data: str) -> None:
             continue
         if bcrypt.checkpw(password.encode(), user["password"].encode()):
             client_socket.sendall("LOGIN:ACKSTATUS:0".encode())
-            auth_clients.add(client_socket)
+            auth_clients[client_socket] = username
             return
         else:
             client_socket.sendall("LOGIN:ACKSTATUS:2".encode())
@@ -143,6 +192,81 @@ def register_protocol(client_socket: socket.socket, data: str) -> None:
         client_socket.sendall("REGISTER:ACKSTATUS:1".encode())
 
 
+def roomlist_protocol(client_socket: socket.socket, data: str) -> None:
+    global pending_rooms, full_rooms
+    data = data.split(":")
+    if len(data) != 2:
+        client_socket.sendall("ROOMLIST:ACKSTATUS:1".encode())
+        return
+    mode = data[1]
+    if mode != "PLAYER" and mode != "VIEWER":
+        client_socket.sendall("ROOMLIST:ACKSTATUS:1".encode())
+        return
+    room_list = ""
+    if mode == "PLAYER":
+        room_list = ",".join(pending_rooms)
+    elif mode == "VIEWER":
+        room_list = ",".join(list(pending_rooms.keys()) + list(full_rooms.keys()))
+    client_socket.sendall(f"ROOMLIST:ACKSTATUS:0:{room_list}".encode())
+
+
+def valid_room_name(room_name: str) -> bool:
+    if len(room_name) >= 20:
+        return False
+    for c in room_name:
+        if not (c.isalnum() or c == "-" or c == " " or c == "_"):
+            return False
+    return True
+
+
+def create_protocol(client_socket: socket.socket, data: str) -> None:
+    data = data.split(":")
+    if len(data) != 2:
+        client_socket.sendall("CREATE:ACKSTATUS:4".encode())
+        return
+    room_name = data[1]
+    if len(pending_rooms) + len(full_rooms) == ROOMS_LIMIT:
+        client_socket.sendall("CREATE:ACKSTATUS:3".encode())
+        return
+    if not valid_room_name(room_name):
+        client_socket.sendall("CREATE:ACKSTATUS:1".encode())
+        return
+    if room_name in pending_rooms or room_name in full_rooms:
+        client_socket.sendall("CREATE:ACKSTATUS:2".encode())
+        return
+    pending_rooms[room_name] = Room(room_name)
+    client_socket.sendall("CREATE:ACKSTATUS:0".encode())
+
+
+def join_protocol(client_socket: socket.socket, data: str) -> None:
+    data = data.split(":")
+    if len(data) != 3:
+        client_socket.sendall("JOIN:ACKSTATUS:3".encode())
+        return
+    _, room_name, mode = data
+    if mode != "PLAYER" and mode != "VIEWER":
+        client_socket.sendall("JOIN:ACKSTATUS:3".encode())
+        return
+    if room_name not in pending_rooms and room_name not in full_rooms:
+        client_socket.sendall("JOIN:ACKSTATUS:1".encode())
+        return
+    if mode == "PLAYER" and room_name not in pending_rooms:
+        client_socket.sendall("JOIN:ACKSTATUS:2".encode())
+        return
+    
+    if mode == "PLAYER":
+        if pending_rooms[room_name].add_player(auth_clients[client_socket], client_socket):
+            full_rooms[room_name] = pending_rooms[room_name]
+            pending_rooms.pop(room_name)
+            begin_protocol(full_rooms[room_name])
+    else:
+        if room_name in pending_rooms:
+            pending_rooms[room_name].add_viewer(client_socket)
+        elif room_name in full_rooms:
+            full_rooms[room_name].add_viewer(client_socket)
+    client_socket.sendall("JOIN:ACKSTATUS:0".encode())
+
+
 def process_message(client_socket: socket.socket) -> bool:
     try:
         data = client_socket.recv(8192)
@@ -156,15 +280,30 @@ def process_message(client_socket: socket.socket) -> bool:
     print(f"received from {clients[client_socket]}: {data}")
     if data.split(":")[0] == "LOGIN":
         login_protocol(client_socket, data)
-    elif data.split(":")[0] == "REGISTER":
+        return True
+    if data.split(":")[0] == "REGISTER":
         register_protocol(client_socket, data)
+        return True
+    if client_socket not in auth_clients:
+        client_socket.sendall("BADAUTH".encode())
+        return True
+    if data.split(":")[0] == "ROOMLIST":
+        roomlist_protocol(client_socket, data)
+        return True
+    if data.split(":")[0] == "CREATE":
+        create_protocol(client_socket, data)
+        return True
+    if data.split(":")[0] == "JOIN":
+        join_protocol(client_socket, data)
+        return True
     return True
 
 
-auth_clients = set()
-sockets_list = []
-clients = {}
+auth_clients: dict = {}
+sockets_list: list[socket.socket] = []
+clients: dict = {}
 
+ROOMS_LIMIT: int = 2
 
 def main(args: list[str]) -> None:
     config(args)
