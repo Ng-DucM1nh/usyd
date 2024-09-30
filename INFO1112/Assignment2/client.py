@@ -3,9 +3,9 @@ import socket
 import threading
 
 
-client_socket = None
-server_address = ()
-most_recent_message = ""
+client_socket: socket.socket = None
+server_address: tuple = ()
+most_recent_message: str = ""
 
 
 def launch_check(args: list[str]) -> None:
@@ -23,12 +23,14 @@ def launch_check(args: list[str]) -> None:
         exit(1)
 
 
-def prompt_message():
+def prompt_message() -> None:
     global client_socket, most_recent_message
     with client_socket:
         while True:
             try:
                 message = input()
+            except EOFError:
+                exit(1)
             except Exception as e:
                 print(f"error prompting for message: {e}")
                 exit(1)
@@ -38,11 +40,17 @@ def prompt_message():
                 message = prompt_login_protocol()
             elif message == "REGISTER":
                 message = prompt_register_protocol()
+            elif message == "ROOMLIST":
+                message = prompt_roomlist_protocol()
+            elif message == "CREATE":
+                message = prompt_create_protocol()
+            elif message == "JOIN":
+                message = prompt_join_protocol()
             most_recent_message = message
             client_socket.sendall(message.encode())
 
 
-def receive_data():
+def receive_data() -> None:
     global client_socket, server_address
     while True:
         try:
@@ -59,11 +67,27 @@ def receive_data():
             receive_login_protocol(data)
         elif data.split(":")[0] == "REGISTER":
             receive_register_protocol(data)
+        elif data == "BADAUTH":
+            print("Error: You must be logged in to perform this action")
+        elif data.split(":")[0] == "ROOMLIST":
+            receive_roomlist_protocol(data)
+        elif data.split(":")[0] == "CREATE":
+            receive_create_protocol(data)
+        elif data.split(":")[0] == "JOIN":
+            receive_join_protocol(data)
+        elif data.split(":")[0] == "BEGIN":
+            print(f"THE GAME BEGINSSSS YEEEEEEEE")
 
 
 def prompt_login_protocol() -> str:
-    username = input("Enter username: ")
-    password = input("Enter password: ")
+    try:
+        username = input("Enter username: ")
+    except EOFError:
+        exit(0)
+    try:
+        password = input("Enter password: ")
+    except EOFError:
+        exit(0)
     return f"LOGIN:{username}:{password}"
 
 
@@ -74,7 +98,7 @@ def receive_login_protocol(data: str) -> None:
     if status == "3":
         print(f"wrong format LOGIN message")
         return
-    _, username, _ = most_recent_message.split(":")
+    username = most_recent_message.split(":")[1]
     if status == "0":
         print(f"Welcome {username}")
     elif status == "1":
@@ -84,8 +108,14 @@ def receive_login_protocol(data: str) -> None:
 
 
 def prompt_register_protocol() -> str:
-    username = input("Enter username: ")
-    password = input("Enter password: ")
+    try:
+        username = input("Enter username: ")
+    except EOFError:
+        exit(0)
+    try:
+        password = input("Enter password: ")
+    except EOFError:
+        exit(0)
     return f"REGISTER:{username}:{password}"
 
 
@@ -95,11 +125,98 @@ def receive_register_protocol(data: str) -> None:
     if status == "2":
         print(f"wrong format REGISTER message")
         return
-    _, username, _ = most_recent_message.split(":")
+    username = most_recent_message.split(":")[1]
     if status == "0":
         print(f"Successfully created user account {username}")
     elif status == "1":
         print(f"Error: User {username} already exists")
+
+
+def prompt_roomlist_protocol() -> str:
+    while True:
+        try:
+            mode = input("Do you want to have a room list as player or viewer? (Player/Viewer) ")
+        except EOFError:
+            exit(0)
+        mode = mode.upper()
+        if mode == "PLAYER" or mode == "VIEWER":
+            break
+        else:
+            print("Unknown input.")
+    return f"ROOMLIST:{mode}"
+
+
+def receive_roomlist_protocol(data: str) -> None:
+    global most_recent_message
+    data = data.split(":")
+    status = data[2]
+    if status == "1":
+        print(f"ClientError: Please input a valid mode.")
+        return
+    mode = most_recent_message.split(":")[1]
+    room_list = data[3]
+    print(f"Room available to join as {mode}: {room_list}")
+
+
+def prompt_create_protocol() -> str:
+    try:
+        room_name = input("Enter room name you want to create: ")
+    except EOFError:
+        exit(0)
+    return f"CREATE:{room_name}"
+
+
+def receive_create_protocol(data: str) -> None:
+    global most_recent_message
+    status = data.split(":")[2]
+    if status == "4":
+        print(f"wrong format CREATE message")
+        return
+    room_name = most_recent_message.split(":")[1]
+    if status == "0":
+        print(f"Successfully created room {room_name}")
+    elif status == "1":
+        print(f"Error: Room {room_name} is invalid")
+    elif status == "2":
+        print(f"Error: Room {room_name} already exists")
+    elif status == "3":
+        print(f"Error: Server already contains a maximum of {ROOMS_LIMIT} rooms")
+
+
+def prompt_join_protocol() -> str:
+    try:
+        room_name = input("Enter room name you want to join: ")
+    except EOFError:
+        exit(0)
+    while True:
+        try:
+            mode = input("You wish to join the room as: (Player/Viewer) ")
+        except EOFError:
+            exit(0)
+        mode = mode.upper()
+        if mode != "PLAYER" and mode != "VIEWER":
+            print("Unknown input.")
+        else:
+            break
+    return f"JOIN:{room_name}:{mode}"
+
+
+def receive_join_protocol(data: str) -> None:
+    global most_recent_message
+    status = data.split(":")[2]
+    if status == "3":
+        print(f"wrong format JOIN message")
+        return
+    _, room_name, mode = most_recent_message.split(":")
+    if status == "0":
+        print(f"Successfully joined room {room_name} as a {mode}")
+    elif status == "1":
+        print(f"Error: No room named {room_name}")
+    elif status == "2":
+        print(f"Error: The room {room_name} already has 2 players")
+
+
+ROOMS_LIMIT: int = 2
 
 
 def main(args: list[str]) -> None:
