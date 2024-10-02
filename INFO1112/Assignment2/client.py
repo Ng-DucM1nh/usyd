@@ -47,36 +47,37 @@ def prompt_message() -> None:
             elif message == "JOIN":
                 message = prompt_join_protocol()
             most_recent_message = message
-            client_socket.sendall(message.encode())
+            client_socket.sendall(f"{message}\n".encode())
 
 
 def receive_data() -> None:
     global client_socket, server_address
     while True:
         try:
-            data = client_socket.recv(8192)
-            if not data:
+            data_list = client_socket.recv(8192)
+            if not data_list:
                 print(f"no data received")
                 exit(0)
         except Exception as e:
             print(f"error receiving data: {e}")
             exit(1)
-        data = data.decode()
-        print(f"received from {server_address}: {data}")
-        if data.split(":")[0] == "LOGIN":
-            receive_login_protocol(data)
-        elif data.split(":")[0] == "REGISTER":
-            receive_register_protocol(data)
-        elif data == "BADAUTH":
-            print("Error: You must be logged in to perform this action")
-        elif data.split(":")[0] == "ROOMLIST":
-            receive_roomlist_protocol(data)
-        elif data.split(":")[0] == "CREATE":
-            receive_create_protocol(data)
-        elif data.split(":")[0] == "JOIN":
-            receive_join_protocol(data)
-        elif data.split(":")[0] == "BEGIN":
-            print(f"THE GAME BEGINSSSS YEEEEEEEE")
+        data_list = data_list.decode()
+        print(f"received from {server_address}: {data_list}")
+        for data in data_list.split("\n"):
+            if data.split(":")[0] == "LOGIN":
+                receive_login_protocol(data)
+            elif data.split(":")[0] == "REGISTER":
+                receive_register_protocol(data)
+            elif data == "BADAUTH":
+                print("Error: You must be logged in to perform this action")
+            elif data.split(":")[0] == "ROOMLIST":
+                receive_roomlist_protocol(data)
+            elif data.split(":")[0] == "CREATE":
+                receive_create_protocol(data)
+            elif data.split(":")[0] == "JOIN":
+                receive_join_protocol(data)
+            elif data.split(":")[0] == "BEGIN":
+                print(f"THE GAME BEGINSSSS YEEEEEEEE")
 
 
 def prompt_login_protocol() -> str:
