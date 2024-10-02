@@ -23,8 +23,11 @@ def launch_check(args: list[str]) -> None:
         exit(1)
 
 
+waiting: bool = False
+
+
 def prompt_message() -> None:
-    global client_socket, most_recent_message
+    global client_socket, most_recent_message, waiting
     with client_socket:
         while True:
             try:
@@ -36,7 +39,10 @@ def prompt_message() -> None:
                 exit(1)
             if message == "QUIT":
                 exit(0)
-            elif message == "LOGIN":
+            if waiting:
+                print("waiting for opponent")
+                continue
+            if message == "LOGIN":
                 message = prompt_login_protocol()
             elif message == "REGISTER":
                 message = prompt_register_protocol()
@@ -51,7 +57,7 @@ def prompt_message() -> None:
 
 
 def receive_data() -> None:
-    global client_socket, server_address
+    global client_socket, server_address, waiting
     while True:
         try:
             data_list = client_socket.recv(8192)
@@ -77,6 +83,7 @@ def receive_data() -> None:
             elif data.split(":")[0] == "JOIN":
                 receive_join_protocol(data)
             elif data.split(":")[0] == "BEGIN":
+                waiting = False
                 print(f"THE GAME BEGINSSSS YEEEEEEEE")
 
 
@@ -203,18 +210,20 @@ def prompt_join_protocol() -> str:
 
 
 def receive_join_protocol(data: str) -> None:
-    global most_recent_message
+    global most_recent_message, waiting
     status = data.split(":")[2]
     if status == "3":
         print(f"wrong format JOIN message")
         return
     _, room_name, mode = most_recent_message.split(":")
-    if status == "0":
-        print(f"Successfully joined room {room_name} as a {mode}")
-    elif status == "1":
+    if status == "1":
         print(f"Error: No room named {room_name}")
     elif status == "2":
         print(f"Error: The room {room_name} already has 2 players")
+    elif status == "0":
+        print(f"Successfully joined room {room_name} as a {mode}")
+        print("waiting for opponent")
+        waiting = True
 
 
 ROOMS_LIMIT: int = 2
