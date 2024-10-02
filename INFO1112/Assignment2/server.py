@@ -253,7 +253,7 @@ def join_protocol(client_socket: socket.socket, data: str) -> None:
     if mode == "PLAYER" and room_name not in pending_rooms:
         client_socket.sendall("JOIN:ACKSTATUS:2\n".encode())
         return
-    
+    client_socket.sendall("JOIN:ACKSTATUS:0\n".encode())
     if mode == "PLAYER":
         if pending_rooms[room_name].add_player(auth_clients[client_socket], client_socket):
             full_rooms[room_name] = pending_rooms[room_name]
@@ -264,7 +264,6 @@ def join_protocol(client_socket: socket.socket, data: str) -> None:
             pending_rooms[room_name].add_viewer(client_socket)
         elif room_name in full_rooms:
             full_rooms[room_name].add_viewer(client_socket)
-    client_socket.sendall("JOIN:ACKSTATUS:0\n".encode())
 
 
 def process_message(client_socket: socket.socket) -> bool:
