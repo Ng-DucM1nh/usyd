@@ -4,6 +4,7 @@ import select
 import os
 import json
 import bcrypt
+import tictactoe
 
 
 class Room:
@@ -15,6 +16,7 @@ class Room:
         self.p1_client_socket = None
         self.p2_client_socket = None
         self.viewers_client_socket = []
+        self.board = None
 
     def has_player1(self) -> bool:
         return self.p1_client_socket is not None
@@ -46,13 +48,6 @@ class Room:
 
 pending_rooms: dict[str, Room] = {}
 full_rooms: dict[str, Room] = {}
-
-
-def begin_protocol(room: Room) -> None:
-    p1_username, p1_client_socket = room.get_player1()
-    p2_username, p2_client_socket = room.get_player2()
-    p1_client_socket.sendall(f"BEGIN:{p1_username}:{p2_username}\n".encode())
-    p2_client_socket.sendall(f"BEGIN:{p1_username}:{p2_username}\n".encode())
 
 
 server_port: int = 0
@@ -135,6 +130,7 @@ def remove_client_socket(client_socket: socket.socket) -> None:
     sockets_list.remove(client_socket)
     del clients[client_socket]
     auth_clients.pop(client_socket, None)
+    client_room.pop(client_socket, None)
 
 
 def login_protocol(client_socket: socket.socket, data: str) -> None:
@@ -239,6 +235,7 @@ def create_protocol(client_socket: socket.socket, data: str) -> None:
 
 
 def join_protocol(client_socket: socket.socket, data: str) -> None:
+    global client_room
     data = data.split(":")
     if len(data) != 3:
         client_socket.sendall("JOIN:ACKSTATUS:3\n".encode())
@@ -264,6 +261,39 @@ def join_protocol(client_socket: socket.socket, data: str) -> None:
             pending_rooms[room_name].add_viewer(client_socket)
         elif room_name in full_rooms:
             full_rooms[room_name].add_viewer(client_socket)
+    client_room[client_socket] = room_name
+
+
+def begin_protocol(room: Room) -> None:
+    p1_username, p1_client_socket = room.get_player1()
+    p2_username, p2_client_socket = room.get_player2()
+    p1_client_socket.sendall(f"BEGIN:{p1_username}:{p2_username}\n".encode())
+    p2_client_socket.sendall(f"BEGIN:{p1_username}:{p2_username}\n".encode())
+    room.board = tictactoe.create_board()
+
+
+def place_protocol(client_socket: socket.socket, data: str) -> None:
+    global full_rooms, client_room, auth_clients
+    room = full_rooms[client_room[client_socket]]
+    username = auth_clients[client_socket]
+    p1 = room.get_player1()[0]
+    marker = 'X' if username == p1 else 'O'
+    _, col, row = data.split(":")
+    col = int(col)
+    row = int(row)
+    room.board = tictactoe.put_marker(room.board, row, col, marker)
+    boardstatus_protocol(room)
+
+
+def boardstatus_protocol(room: Room) -> None:
+    board_status = tictactoe.get_board_status(room.board)
+    message = f"BOARDSTATUS:{board_status}\n"
+    p1_client_socket = room.get_player1()[1]
+    p2_client_socket = room.get_player2()[1]
+    p1_client_socket.sendall(message.encode())
+    p2_client_socket.sendall(message.encode())
+    for viewer_client_socket in room.viewers_client_socket:
+        viewer_client_socket.sendall(message.encode())
 
 
 def process_message(client_socket: socket.socket) -> bool:
@@ -296,12 +326,16 @@ def process_message(client_socket: socket.socket) -> bool:
         if data.split(":")[0] == "JOIN":
             join_protocol(client_socket, data)
             return True
+        if data.split(":")[0] == "PLACE":
+            place_protocol(client_socket, data)
+            return True
     return True
 
 
-auth_clients: dict = {}
+auth_clients: dict[socket.socket, str] = {}
 sockets_list: list[socket.socket] = []
-clients: dict = {}
+clients: dict[socket.socket, str] = {}
+client_room: dict[socket.socket, str] = {}
 
 ROOMS_LIMIT: int = 2
 
