@@ -38,20 +38,12 @@ def get_board_status(board: Board) -> str:
     return ans
 
 
-def get_marker(board: Board, row: int, col: int) -> str | None:
-    """Get the marker at position (<row>,<col>) on the board"""
-    if row < 0 or row > 2 or col < 0 or col > 2:
-        print(f"Invalid position ({row},{col}). Row/Column must be an integer between 0 and 2")
-        return
-    return board[row][col]
-
-
 def put_marker(board: Board, row: int, col: int, marker: str) -> Board | None:
     """Put the marker <marker> at position (<row>,<col>) on the board"""
     if row < 0 or row > 2 or col < 0 or col > 2:
         print(f"Invalid position ({row},{col}). Row/Column must be an integer between 0 and 2")
         return
-    if get_marker(board, row, col) != ' ':
+    if board[row][col] != ' ':
         print(f"({row},{col}) is occupied by {board[row][col]}")
         return
     if marker != 'X' and marker != 'O':
@@ -132,7 +124,7 @@ def main() -> None:
                 print(f"caught exception {e}")
             if row < 0 or row > 2 or col < 0 or col > 2:
                 print(f"Invalid position ({row},{col}). Row/Column must be an integer between 0 and 2")
-            elif get_marker(board, row, col) != ' ':
+            elif board[row][col] != ' ':
                 print(f"({row},{col}) occupied by {board[row][col]}")
             else:
                 break
