@@ -1,11 +1,13 @@
 import sys
 import socket
 import threading
+import tictactoe
 
 
 client_socket: socket.socket = None
 server_address: tuple = ()
 most_recent_message: str = ""
+user_username: str = ""
 
 
 def launch_check(args: list[str]) -> None:
@@ -23,11 +25,11 @@ def launch_check(args: list[str]) -> None:
         exit(1)
 
 
-waiting: bool = False
+in_room: bool = False
 
 
 def prompt_message() -> None:
-    global client_socket, most_recent_message, waiting
+    global client_socket, most_recent_message, game_begun, is_user_turn, in_room
     with client_socket:
         while True:
             try:
@@ -39,25 +41,36 @@ def prompt_message() -> None:
                 exit(1)
             if message == "QUIT":
                 exit(0)
-            if waiting:
-                print("waiting for opponent")
-                continue
-            if message == "LOGIN":
-                message = prompt_login_protocol()
-            elif message == "REGISTER":
-                message = prompt_register_protocol()
-            elif message == "ROOMLIST":
-                message = prompt_roomlist_protocol()
-            elif message == "CREATE":
-                message = prompt_create_protocol()
-            elif message == "JOIN":
-                message = prompt_join_protocol()
+            if not in_room:
+                if message == "LOGIN":
+                    message = prompt_login_protocol()
+                elif message == "REGISTER":
+                    message = prompt_register_protocol()
+                elif message == "ROOMLIST":
+                    message = prompt_roomlist_protocol()
+                elif message == "CREATE":
+                    message = prompt_create_protocol()
+                elif message == "JOIN":
+                    message = prompt_join_protocol()
+                else:
+                    print(f"Unknown command: {message}")
+            else:
+                if not game_begun:
+                    print("waiting for opponent")
+                    continue
+                if not is_user_turn:
+                    print("waiting for opponent to place marker")
+                    continue
+                if message == "PLACE":
+                    message = prompt_place_protocol()
+                else:
+                    print(f"Unknown command: {message}")
             most_recent_message = message
             client_socket.sendall(f"{message}\n".encode())
 
 
 def receive_data() -> None:
-    global client_socket, server_address, waiting
+    global client_socket, server_address
     while True:
         try:
             data_list = client_socket.recv(8192)
@@ -83,8 +96,9 @@ def receive_data() -> None:
             elif data.split(":")[0] == "JOIN":
                 receive_join_protocol(data)
             elif data.split(":")[0] == "BEGIN":
-                waiting = False
-                print(f"THE GAME BEGINSSSS YEEEEEEEE")
+                receive_begin_protocol(data)
+            elif data.split(":")[0] == "BOARDSTATUS":
+                receive_boardstatus_protocol(data)
 
 
 def prompt_login_protocol() -> str:
@@ -101,7 +115,7 @@ def prompt_login_protocol() -> str:
 
 def receive_login_protocol(data: str) -> None:
     # response of a recent LOGIN message
-    global most_recent_message
+    global most_recent_message, user_username
     status = data.split(":")[2]
     if status == "3":
         print(f"wrong format LOGIN message")
@@ -109,6 +123,7 @@ def receive_login_protocol(data: str) -> None:
     username = most_recent_message.split(":")[1]
     if status == "0":
         print(f"Welcome {username}")
+        user_username = username
     elif status == "1":
         print(f"Error: User {username} not found")
     elif status == "2":
@@ -210,7 +225,7 @@ def prompt_join_protocol() -> str:
 
 
 def receive_join_protocol(data: str) -> None:
-    global most_recent_message, waiting
+    global most_recent_message, in_room
     status = data.split(":")[2]
     if status == "3":
         print(f"wrong format JOIN message")
@@ -222,8 +237,57 @@ def receive_join_protocol(data: str) -> None:
         print(f"Error: The room {room_name} already has 2 players")
     elif status == "0":
         print(f"Successfully joined room {room_name} as a {mode}")
-        print("waiting for opponent")
-        waiting = True
+        in_room = True
+
+
+is_user_turn: bool = False
+game_begun: bool = False
+
+board = None
+
+def receive_begin_protocol(data: str) -> None:
+    global is_user_turn, game_begun, user_username, board
+    _, p1, p2 = data.split(":")
+    print(f"match between {p1} and {p2} will commence, it is currently {p1}’s turn.")
+    game_begun = True
+    is_user_turn = (p1 == user_username)
+    print(f"la sao zayyyyy {is_user_turn}")
+    board = tictactoe.create_board()
+
+
+def receive_boardstatus_protocol(data: str) -> None:
+    global is_user_turn, board
+    status = data.split(":")[1]
+    board = tictactoe.assign_board(status)
+    tictactoe.print_board(board)
+    print(f"truoc kia {is_user_turn}")
+    is_user_turn = not is_user_turn
+    print(f"wueeee {is_user_turn}")
+    if is_user_turn:
+        print(f"It is the current player’s turn")
+    else:
+        print(f"It is the opposing player’s turn")
+
+
+def prompt_place_protocol() -> str:
+    global board
+    while True:
+        try:
+            col = int(input("Column: "))
+            row = int(input("Row: "))
+        except EOFError:
+            exit(0)
+        except:
+            print(f"(Column/Row) values must be an integer between 0 and 2")
+            continue
+        if row < 0 or row > 2 or col < 0 or col > 2:
+            print(f"(Column/Row) values must be an integer between 0 and 2")
+            continue
+        if tictactoe.get_marker(board, row, col) != ' ':
+            print(f"({col}, {row}) is occupied by {tictactoe.get_marker(board, row, col)}.")
+            continue
+        break
+    return f"PLACE:{col}:{row}"
 
 
 ROOMS_LIMIT: int = 2
