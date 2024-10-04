@@ -282,7 +282,32 @@ def place_protocol(client_socket: socket.socket, data: str) -> None:
     col = int(col)
     row = int(row)
     room.board = tictactoe.put_marker(room.board, row, col, marker)
+    if tictactoe.player_wins(marker, room.board):
+        gameend_protocol(room, "0", username)
+        return
+    if tictactoe.players_draw(room.board):
+        gameend_protocol(room, "1")
+        return
     boardstatus_protocol(room)
+
+
+def gameend_protocol(room: Room, status_code: str, *winner_username) -> None:
+    board_status = tictactoe.get_board_status(room.board)
+    if winner_username:
+        message = f"GAMEEND:{board_status}:{status_code}:{winner_username[0]}\n"
+    else:
+        message = f"GAMEEND:{board_status}:{status_code}\n"
+    p1_client_socket = room.get_player1()[1]
+    p2_client_socket = room.get_player2()[1]
+    p1_client_socket.sendall(message.encode())
+    p2_client_socket.sendall(message.encode())
+    for viewer_client_socket in room.viewers_client_socket:
+        viewer_client_socket.sendall(message.encode())
+    client_room.pop(p1_client_socket)
+    client_room.pop(p2_client_socket)
+    for viewer_client_socket in room.viewers_client_socket:
+        client_room.pop(viewer_client_socket)
+    full_rooms.pop(room.room_name)
 
 
 def boardstatus_protocol(room: Room) -> None:
@@ -294,6 +319,16 @@ def boardstatus_protocol(room: Room) -> None:
     p2_client_socket.sendall(message.encode())
     for viewer_client_socket in room.viewers_client_socket:
         viewer_client_socket.sendall(message.encode())
+
+
+def forfeit_protocol(client_socket: socket.socket, data: str) -> None:
+    global full_rooms, auth_clients, client_room
+    room = full_rooms[client_room[client_socket]]
+    username = auth_clients[client_socket]
+    p1_username = room.get_player1()[0]
+    p2_username = room.get_player2()[0]
+    opponent = p2_username if username == p1_username else p1_username
+    gameend_protocol(room, "2", opponent)
 
 
 def process_message(client_socket: socket.socket) -> bool:
@@ -328,6 +363,9 @@ def process_message(client_socket: socket.socket) -> bool:
             return True
         if data.split(":")[0] == "PLACE":
             place_protocol(client_socket, data)
+            return True
+        if data.split(":")[0] == "FORFEIT":
+            forfeit_protocol(client_socket, data)
             return True
     return True
 
