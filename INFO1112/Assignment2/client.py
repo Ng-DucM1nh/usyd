@@ -63,6 +63,8 @@ def prompt_message() -> None:
                     continue
                 if message == "PLACE":
                     message = prompt_place_protocol()
+                elif message == "FORFEIT":
+                    message = prompt_forfeit_protocol()
                 else:
                     print(f"Unknown command: {message}")
             most_recent_message = message
@@ -99,6 +101,8 @@ def receive_data() -> None:
                 receive_begin_protocol(data)
             elif data.split(":")[0] == "BOARDSTATUS":
                 receive_boardstatus_protocol(data)
+            elif data.split(":")[0] == "GAMEEND":
+                receive_gameend_protocol(data)
 
 
 def prompt_login_protocol() -> str:
@@ -251,7 +255,6 @@ def receive_begin_protocol(data: str) -> None:
     print(f"match between {p1} and {p2} will commence, it is currently {p1}’s turn.")
     game_begun = True
     is_user_turn = (p1 == user_username)
-    print(f"la sao zayyyyy {is_user_turn}")
     board = tictactoe.create_board()
 
 
@@ -260,9 +263,7 @@ def receive_boardstatus_protocol(data: str) -> None:
     status = data.split(":")[1]
     board = tictactoe.assign_board(status)
     tictactoe.print_board(board)
-    print(f"truoc kia {is_user_turn}")
     is_user_turn = not is_user_turn
-    print(f"wueeee {is_user_turn}")
     if is_user_turn:
         print(f"It is the current player’s turn")
     else:
@@ -288,6 +289,32 @@ def prompt_place_protocol() -> str:
             continue
         break
     return f"PLACE:{col}:{row}"
+
+
+def receive_gameend_protocol(data: str) -> None:
+    global user_username, board, game_begun, in_room, is_user_turn
+    board_status, status_code = data.split(":")[1:3]
+    board = tictactoe.assign_board(board_status)
+    tictactoe.print_board(board)
+    if status_code == "1":
+        print(f"Game ended in a draw")
+    elif status_code == "0":
+        winner_username = data.split(":")[3]
+        if user_username == winner_username:
+            print(f"Congratulations, you won!")
+        else:
+            print(f"Sorry you lost. Good luck next time.")
+    elif status_code == "2":
+        winner_username = data.split(":")[3]
+        print(f"{winner_username} won due to the opposing player forfeiting")
+    board = None
+    game_begun = False
+    in_room = False
+    is_user_turn = False
+
+
+def prompt_forfeit_protocol() -> str:
+    return f"FORFEIT"
 
 
 ROOMS_LIMIT: int = 2
