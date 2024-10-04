@@ -45,6 +45,24 @@ class Room:
     def add_viewer(self, client_socket: socket.socket) -> None:
         self.viewers_client_socket.append(client_socket)
 
+    def send_message(self, message: str) -> None:
+        p1_client_socket = self.p1_client_socket
+        p2_client_socket = self.p2_client_socket
+        p1_client_socket.sendall(message.encode())
+        p2_client_socket.sendall(message.encode())
+        for viewer_client_socket in self.viewers_client_socket:
+            viewer_client_socket.sendall(message.encode())
+
+    def destroy(self) -> None:
+        global client_room, full_rooms
+        p1_client_socket = self.p1_client_socket
+        p2_client_socket = self.p2_client_socket
+        client_room.pop(p1_client_socket)
+        client_room.pop(p2_client_socket)
+        for viewer_client_socket in self.viewers_client_socket:
+            client_room.pop(viewer_client_socket)
+        full_rooms.pop(self.room_name)
+
 
 pending_rooms: dict[str, Room] = {}
 full_rooms: dict[str, Room] = {}
@@ -265,11 +283,10 @@ def join_protocol(client_socket: socket.socket, data: str) -> None:
 
 
 def begin_protocol(room: Room) -> None:
-    p1_username, p1_client_socket = room.get_player1()
-    p2_username, p2_client_socket = room.get_player2()
-    p1_client_socket.sendall(f"BEGIN:{p1_username}:{p2_username}\n".encode())
-    p2_client_socket.sendall(f"BEGIN:{p1_username}:{p2_username}\n".encode())
+    p1_username = room.get_player1()[0]
+    p2_username = room.get_player2()[0]
     room.board = tictactoe.create_board()
+    room.send_message(f"BEGIN:{p1_username}:{p2_username}\n")
 
 
 def place_protocol(client_socket: socket.socket, data: str) -> None:
@@ -297,28 +314,14 @@ def gameend_protocol(room: Room, status_code: str, *winner_username) -> None:
         message = f"GAMEEND:{board_status}:{status_code}:{winner_username[0]}\n"
     else:
         message = f"GAMEEND:{board_status}:{status_code}\n"
-    p1_client_socket = room.get_player1()[1]
-    p2_client_socket = room.get_player2()[1]
-    p1_client_socket.sendall(message.encode())
-    p2_client_socket.sendall(message.encode())
-    for viewer_client_socket in room.viewers_client_socket:
-        viewer_client_socket.sendall(message.encode())
-    client_room.pop(p1_client_socket)
-    client_room.pop(p2_client_socket)
-    for viewer_client_socket in room.viewers_client_socket:
-        client_room.pop(viewer_client_socket)
-    full_rooms.pop(room.room_name)
+    room.send_message(message)
+    room.destroy()
 
 
 def boardstatus_protocol(room: Room) -> None:
     board_status = tictactoe.get_board_status(room.board)
     message = f"BOARDSTATUS:{board_status}\n"
-    p1_client_socket = room.get_player1()[1]
-    p2_client_socket = room.get_player2()[1]
-    p1_client_socket.sendall(message.encode())
-    p2_client_socket.sendall(message.encode())
-    for viewer_client_socket in room.viewers_client_socket:
-        viewer_client_socket.sendall(message.encode())
+    room.send_message(message)
 
 
 def forfeit_protocol(client_socket: socket.socket, data: str) -> None:
