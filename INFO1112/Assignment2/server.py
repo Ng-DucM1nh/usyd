@@ -16,6 +16,7 @@ class Room:
         self.p1_client_socket = None
         self.p2_client_socket = None
         self.viewers_client_socket = []
+        self.current_turn_player = ""
         self.board = None
 
     def has_player1(self) -> bool:
@@ -40,6 +41,7 @@ class Room:
             return False
         self.p2_username = username
         self.p2_client_socket = client_socket
+        self.current_turn_player = self.p1_username
         return True
 
     def add_viewer(self, client_socket: socket.socket) -> None:
@@ -62,6 +64,9 @@ class Room:
         for viewer_client_socket in self.viewers_client_socket:
             client_room.pop(viewer_client_socket)
         full_rooms.pop(self.room_name)
+
+    def swap_turn(self) -> None:
+        self.current_turn_player = self.p2_username if self.current_turn_player == self.p1_username else self.p2_username
 
 
 pending_rooms: dict[str, Room] = {}
@@ -233,6 +238,21 @@ def valid_room_name(room_name: str) -> bool:
     return True
 
 
+def add_client_to_room(client_socket: socket.socket, mode: str, room_name: str) -> None:
+    global client_room, pending_rooms, full_rooms
+    client_room[client_socket] = room_name
+    if mode == "PLAYER":
+        if pending_rooms[room_name].add_player(auth_clients[client_socket], client_socket):
+            full_rooms[room_name] = pending_rooms[room_name]
+            pending_rooms.pop(room_name)
+            begin_protocol(full_rooms[room_name])
+    elif mode == "VIEWER":
+        if room_name in pending_rooms:
+            pending_rooms[room_name].add_viewer(client_socket)
+        elif room_name in full_rooms:
+            full_rooms[room_name].add_viewer(client_socket)
+            inprogress_protocol(client_socket)
+
 def create_protocol(client_socket: socket.socket, data: str) -> None:
     data = data.split(":")
     if len(data) != 2:
@@ -249,11 +269,11 @@ def create_protocol(client_socket: socket.socket, data: str) -> None:
         client_socket.sendall("CREATE:ACKSTATUS:2\n".encode())
         return
     pending_rooms[room_name] = Room(room_name)
+    add_client_to_room(client_socket, "PLAYER", room_name)
     client_socket.sendall("CREATE:ACKSTATUS:0\n".encode())
 
 
 def join_protocol(client_socket: socket.socket, data: str) -> None:
-    global client_room
     data = data.split(":")
     if len(data) != 3:
         client_socket.sendall("JOIN:ACKSTATUS:3\n".encode())
@@ -269,17 +289,7 @@ def join_protocol(client_socket: socket.socket, data: str) -> None:
         client_socket.sendall("JOIN:ACKSTATUS:2\n".encode())
         return
     client_socket.sendall("JOIN:ACKSTATUS:0\n".encode())
-    if mode == "PLAYER":
-        if pending_rooms[room_name].add_player(auth_clients[client_socket], client_socket):
-            full_rooms[room_name] = pending_rooms[room_name]
-            pending_rooms.pop(room_name)
-            begin_protocol(full_rooms[room_name])
-    else:
-        if room_name in pending_rooms:
-            pending_rooms[room_name].add_viewer(client_socket)
-        elif room_name in full_rooms:
-            full_rooms[room_name].add_viewer(client_socket)
-    client_room[client_socket] = room_name
+    add_client_to_room(client_socket, mode, room_name)
 
 
 def begin_protocol(room: Room) -> None:
@@ -320,6 +330,7 @@ def gameend_protocol(room: Room, status_code: str, *winner_username) -> None:
 
 def boardstatus_protocol(room: Room) -> None:
     board_status = tictactoe.get_board_status(room.board)
+    room.swap_turn()
     message = f"BOARDSTATUS:{board_status}\n"
     room.send_message(message)
 
@@ -332,6 +343,16 @@ def forfeit_protocol(client_socket: socket.socket, data: str) -> None:
     p2_username = room.get_player2()[0]
     opponent = p2_username if username == p1_username else p1_username
     gameend_protocol(room, "2", opponent)
+
+
+def inprogress_protocol(client_socket: socket.socket) -> None:
+    global full_rooms, client_room
+    room = full_rooms[client_room[client_socket]]
+    p1_username = room.get_player1()[0]
+    p2_username = room.get_player2()[0]
+    current_turn_player = room.current_turn_player
+    opposing_player = p1_username if current_turn_player == p2_username else p2_username
+    client_socket.sendall(f"INPROGRESS:{current_turn_player}:{opposing_player}\n".encode())
 
 
 def process_message(client_socket: socket.socket) -> bool:
