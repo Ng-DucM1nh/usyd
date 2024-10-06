@@ -25,11 +25,11 @@ class Room:
     def has_player2(self) -> bool:
         return self.p2_client_socket is not None
 
-    def get_player1(self) -> tuple[str, socket.socket]:
-        return self.p1_username, self.p1_client_socket
+    def get_player1(self) -> tuple[str, socket.socket] | None:
+        return self.p1_username, self.p1_client_socket if self.has_player1() else None
 
-    def get_player2(self) -> tuple[str, socket.socket]:
-        return self.p2_username, self.p2_client_socket
+    def get_player2(self) -> tuple[str, socket.socket] | None:
+        return self.p2_username, self.p2_client_socket if self.has_player2() else None
 
     def get_viewers(self) -> list[socket.socket]:
         return self.viewers_client_socket
@@ -66,7 +66,7 @@ class Room:
         full_rooms.pop(self.room_name)
 
     def swap_turn(self) -> None:
-        self.current_turn_player = self.p2_username if self.current_turn_player == self.p1_username else self.p2_username
+        self.current_turn_player = self.p2_username if self.current_turn_player == self.p1_username else self.p1_username
 
 
 pending_rooms: dict[str, Room] = {}
@@ -111,6 +111,14 @@ def config(args: list[str]) -> None:
     
     global server_port, user_database_path
     server_port = data["port"]
+    try:
+        server_port = int(server_port)
+    except:
+        sys.stderr.write(f"Error: port number out of range")
+        exit(1)
+    if server_port < 1024 or server_port > 65535:
+        sys.stderr.write(f"Error: port number out of range")
+        exit(1)
     user_database_path = data["userDatabase"]
     user_database_path = os.path.expanduser(user_database_path)
     user_database_path = os.path.abspath(user_database_path)
@@ -148,8 +156,22 @@ def create_client_socket(server_socket: socket.socket) -> None:
 
 
 def remove_client_socket(client_socket: socket.socket) -> None:
-    global sockets_list, clients, auth_clients
+    global sockets_list, clients, auth_clients, client_room
     print(f"disconnection from {clients[client_socket]}")
+    if client_socket in client_room:
+        room_name = client_room[client_socket]
+        # if room_name in pending_rooms:
+        #     p1_username = room.get_player1()[0]
+        #     gameend_protocol
+        if room_name in full_rooms:
+            room = full_rooms[room_name]
+            p1_username = room.get_player1()[0]
+            p2_username = room.get_player2()[0]
+            client_username = auth_clients[client_socket]
+            if client_username == p1_username:
+                gameend_protocol(room, "2", p2_username)
+            elif client_username == p2_username:
+                gameend_protocol(room, "2", p1_username)
     sockets_list.remove(client_socket)
     del clients[client_socket]
     auth_clients.pop(client_socket, None)
@@ -331,6 +353,7 @@ def gameend_protocol(room: Room, status_code: str, *winner_username) -> None:
 def boardstatus_protocol(room: Room) -> None:
     board_status = tictactoe.get_board_status(room.board)
     room.swap_turn()
+    print(f"sending BOARDSTATUS message, the next turn player is {room.current_turn_player}")
     message = f"BOARDSTATUS:{board_status}\n"
     room.send_message(message)
 
@@ -384,6 +407,9 @@ def process_message(client_socket: socket.socket) -> bool:
             return True
         if data.split(":")[0] == "JOIN":
             join_protocol(client_socket, data)
+            return True
+        if client_socket not in client_room:
+            client_socket.sendall("NOROOM\n".encode())
             return True
         if data.split(":")[0] == "PLACE":
             place_protocol(client_socket, data)
