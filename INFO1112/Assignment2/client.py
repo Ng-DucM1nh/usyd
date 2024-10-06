@@ -324,10 +324,13 @@ def receive_gameend_protocol(data: str) -> None:
         print(f"Game ended in a draw")
     elif status_code == "0":
         winner_username = data.split(":")[3]
-        if user_username == winner_username:
-            print(f"Congratulations, you won!")
+        if is_player:    
+            if user_username == winner_username:
+                print(f"Congratulations, you won!")
+            else:
+                print(f"Sorry you lost. Good luck next time.")
         else:
-            print(f"Sorry you lost. Good luck next time.")
+            print(f"{winner_username} has won this game")
     elif status_code == "2":
         winner_username = data.split(":")[3]
         print(f"{winner_username} won due to the opposing player forfeiting")
