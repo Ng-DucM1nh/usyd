@@ -29,7 +29,7 @@ in_room: bool = False
 
 
 def prompt_message() -> None:
-    global client_socket, most_recent_message, game_begun, is_user_turn, in_room
+    global client_socket, most_recent_message, game_begun, in_room
     with client_socket:
         while True:
             try:
@@ -54,12 +54,8 @@ def prompt_message() -> None:
                     message = prompt_join_protocol()
                 else:
                     print(f"Unknown command: {message}")
-            else:
+            elif in_room:
                 if not game_begun:
-                    print("waiting for opponent")
-                    continue
-                if not is_user_turn:
-                    print("waiting for opponent to place marker")
                     continue
                 if message == "PLACE":
                     message = prompt_place_protocol()
@@ -90,7 +86,7 @@ def receive_data() -> None:
             elif data.split(":")[0] == "REGISTER":
                 receive_register_protocol(data)
             elif data == "BADAUTH":
-                print("Error: You must be logged in to perform this action")
+                sys.stderr.write("Error: You must be logged in to perform this action\n")
             elif data.split(":")[0] == "ROOMLIST":
                 receive_roomlist_protocol(data)
             elif data.split(":")[0] == "CREATE":
@@ -101,6 +97,8 @@ def receive_data() -> None:
                 receive_begin_protocol(data)
             elif data.split(":")[0] == "BOARDSTATUS":
                 receive_boardstatus_protocol(data)
+            elif data.split(":")[0] == "INPROGRESS":
+                receive_inprogress_protocol(data)
             elif data.split(":")[0] == "GAMEEND":
                 receive_gameend_protocol(data)
 
@@ -129,9 +127,9 @@ def receive_login_protocol(data: str) -> None:
         print(f"Welcome {username}")
         user_username = username
     elif status == "1":
-        print(f"Error: User {username} not found")
+        sys.stderr.write(f"Error: User {username} not found\n")
     elif status == "2":
-        print(f"Error: Wrong password for user {username}")
+        sys.stderr.write(f"Error: Wrong password for user {username}\n")
 
 
 def prompt_register_protocol() -> str:
@@ -156,7 +154,7 @@ def receive_register_protocol(data: str) -> None:
     if status == "0":
         print(f"Successfully created user account {username}")
     elif status == "1":
-        print(f"Error: User {username} already exists")
+        sys.stderr.write(f"Error: User {username} already exists\n")
 
 
 def prompt_roomlist_protocol() -> str:
@@ -178,7 +176,7 @@ def receive_roomlist_protocol(data: str) -> None:
     data = data.split(":")
     status = data[2]
     if status == "1":
-        print(f"ClientError: Please input a valid mode.")
+        sys.stderr.write(f"Error: Please input a valid mode.\n")
         return
     mode = most_recent_message.split(":")[1]
     room_list = data[3]
@@ -194,7 +192,7 @@ def prompt_create_protocol() -> str:
 
 
 def receive_create_protocol(data: str) -> None:
-    global most_recent_message
+    global most_recent_message, in_room, is_player
     status = data.split(":")[2]
     if status == "4":
         print(f"wrong format CREATE message")
@@ -202,12 +200,15 @@ def receive_create_protocol(data: str) -> None:
     room_name = most_recent_message.split(":")[1]
     if status == "0":
         print(f"Successfully created room {room_name}")
+        in_room = True
+        is_player = True
+        print(f"Waiting for other player...")
     elif status == "1":
-        print(f"Error: Room {room_name} is invalid")
+        sys.stderr.write(f"Error: Room {room_name} is invalid\n")
     elif status == "2":
-        print(f"Error: Room {room_name} already exists")
+        sys.stderr.write(f"Error: Room {room_name} already exists\n")
     elif status == "3":
-        print(f"Error: Server already contains a maximum of {ROOMS_LIMIT} rooms")
+        sys.stderr.write(f"Error: Server already contains a maximum of {ROOMS_LIMIT} rooms\n")
 
 
 def prompt_join_protocol() -> str:
@@ -228,46 +229,69 @@ def prompt_join_protocol() -> str:
     return f"JOIN:{room_name}:{mode}"
 
 
+is_player: bool = False
+
+
 def receive_join_protocol(data: str) -> None:
-    global most_recent_message, in_room
+    global most_recent_message, in_room, is_player
     status = data.split(":")[2]
     if status == "3":
         print(f"wrong format JOIN message")
         return
     _, room_name, mode = most_recent_message.split(":")
     if status == "1":
-        print(f"Error: No room named {room_name}")
+        sys.stderr.write(f"Error: No room named {room_name}\n")
     elif status == "2":
-        print(f"Error: The room {room_name} already has 2 players")
+        sys.stderr.write(f"Error: The room {room_name} already has 2 players\n")
     elif status == "0":
         print(f"Successfully joined room {room_name} as a {mode}")
         in_room = True
+        is_player = (mode == "PLAYER")
+        print(f"Waiting for other player...")
 
 
-is_user_turn: bool = False
+is_p1_turn: bool = False
 game_begun: bool = False
 
 board = None
 
+p1_username: str = ""
+p2_username: str = ""
+
 def receive_begin_protocol(data: str) -> None:
-    global is_user_turn, game_begun, user_username, board
+    global is_p1_turn, game_begun, user_username, board, p1_username, p2_username
     _, p1, p2 = data.split(":")
+    p1_username = p1
+    p2_username = p2
     print(f"match between {p1} and {p2} will commence, it is currently {p1}’s turn.")
-    game_begun = True
-    is_user_turn = (p1 == user_username)
+    if user_username == p1 or user_username == p2:
+        game_begun = True
+        is_p1_turn = True
     board = tictactoe.create_board()
 
 
 def receive_boardstatus_protocol(data: str) -> None:
-    global is_user_turn, board
+    global is_user_turn, board, is_p1_turn, is_player
     status = data.split(":")[1]
     board = tictactoe.assign_board(status)
     tictactoe.print_board(board)
-    is_user_turn = not is_user_turn
-    if is_user_turn:
-        print(f"It is the current player’s turn")
+    is_p1_turn = not is_p1_turn
+    if is_player:
+        if is_p1_turn:
+            if user_username == p1_username:
+                print(f"It is the current player's turn")
+            else:
+                print(f"It is the opposing player's turn")
+        else:
+            if user_username == p1_username:
+                print(f"It is the opposing player's turn")
+            else:
+                print(f"It is the current player's turn")
     else:
-        print(f"It is the opposing player’s turn")
+        if is_p1_turn:
+            print(f"It is {p1_username}'s turn")
+        else:
+            print(f"It is {p2_username}'s turn")
 
 
 def prompt_place_protocol() -> str:
@@ -292,7 +316,7 @@ def prompt_place_protocol() -> str:
 
 
 def receive_gameend_protocol(data: str) -> None:
-    global user_username, board, game_begun, in_room, is_user_turn
+    global user_username, board, game_begun, in_room, is_p1_turn, p1_username, p2_username, is_player
     board_status, status_code = data.split(":")[1:3]
     board = tictactoe.assign_board(board_status)
     tictactoe.print_board(board)
@@ -310,11 +334,23 @@ def receive_gameend_protocol(data: str) -> None:
     board = None
     game_begun = False
     in_room = False
-    is_user_turn = False
+    is_player = False
+    is_p1_turn = False
+    p1_username = ""
+    p2_username = ""
 
 
 def prompt_forfeit_protocol() -> str:
     return f"FORFEIT"
+
+
+def receive_inprogress_protocol(data: str) -> None:
+    global p1_username, p2_username, is_p1_turn
+    _, current_turn_player, opposing_player = data.split(":")
+    p1_username = current_turn_player
+    p2_username = opposing_player
+    is_p1_turn = True
+    print(f"Match between {current_turn_player} and {opposing_player} is currently in progress, it is {current_turn_player}’s turn")
 
 
 ROOMS_LIMIT: int = 2
