@@ -1,6 +1,3 @@
-import game
-
-
 BOARD_SIZE = 3
 CELL_SIZE = 5
 ROW_SEPARATOR = '-'
@@ -130,6 +127,7 @@ def main() -> None:
                 col = int(input("Col: "))
             except Exception as e:
                 print(f"caught exception {e}")
+                continue
             if row < 0 or row > 2 or col < 0 or col > 2:
                 print(f"Invalid position ({row},{col}). Row/Column must be an integer between 0 and 2")
             elif get_marker(board, row, col) != ' ':
