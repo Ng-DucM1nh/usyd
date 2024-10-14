@@ -51,8 +51,8 @@ def put_marker(board: Board, row: int, col: int, marker: str) -> Board | None:
     if get_marker(board, row, col) != ' ':
         print(f"({row},{col}) is occupied by {board[row][col]}")
         return
-    if marker != 'X' and marker != 'O':
-        print(f"marker must be X or O")
+    if marker not in ('X', 'O'):
+        print("marker must be X or O")
         return
     board[row][col] = marker
     return board
@@ -61,7 +61,7 @@ def put_marker(board: Board, row: int, col: int, marker: str) -> Board | None:
 def player_wins_vertically(player: str, board: Board) -> bool:
     """Check if <player> wins vertically"""
     return any(
-        all(board[y][x] == player for y in range(BOARD_SIZE)) 
+        all(board[y][x] == player for y in range(BOARD_SIZE))
         for x in range(BOARD_SIZE)
     )
 
@@ -69,7 +69,7 @@ def player_wins_vertically(player: str, board: Board) -> bool:
 def player_wins_horizontally(player: str, board: Board) -> bool:
     """Check if <player> wins horizontally"""
     return any(
-        all(board[x][y] == player for y in range(BOARD_SIZE)) 
+        all(board[x][y] == player for y in range(BOARD_SIZE))
         for x in range(BOARD_SIZE)
     )
 
@@ -94,8 +94,8 @@ def player_wins(player: str, board: Board) -> bool:
 def players_draw(board: Board) -> bool:
     """Determines whether the players draw on the given board"""
     return all(
-        board[y][x] != ' ' 
-        for y in range(BOARD_SIZE) 
+        board[y][x] != ' '
+        for y in range(BOARD_SIZE)
         for x in range(BOARD_SIZE)
     )
 
