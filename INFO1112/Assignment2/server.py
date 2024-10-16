@@ -408,7 +408,10 @@ def place_protocol(client_socket: socket.socket, data: str) -> None:
     '''
     handle the PLACE protocol
     '''
-    room = full_rooms[client_room[client_socket]]
+    client_room_name = client_room[client_socket]
+    if client_room_name in pending_rooms:
+        return
+    room = full_rooms[client_room_name]
     username = auth_clients[client_socket]
     p1 = room.get_player1()[0]
     marker = 'X' if username == p1 else 'O'
