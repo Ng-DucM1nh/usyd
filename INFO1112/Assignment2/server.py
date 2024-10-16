@@ -480,9 +480,11 @@ def inprogress_protocol(client_socket: socket.socket) -> None:
 def process_message(client_socket: socket.socket) -> bool:
     '''
     process received message and respond accordingly to protocols
-    return False if no data is received or there is an error raises
+    return False if no data is received or there is an error raised
     return True otherwise
     '''
+    if client_socket in pending_rooms:
+        return True
     try:
         data_list = client_socket.recv(8192)
         if not data_list:
