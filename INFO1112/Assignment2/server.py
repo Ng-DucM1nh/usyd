@@ -208,6 +208,7 @@ def create_client_socket(server_socket: socket.socket) -> None:
     create a new client socket and add it to global tracking databases
     '''
     client_socket, client_address = server_socket.accept()
+    client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     client_socket.setblocking(False)
     sockets_list.append(client_socket)
     clients[client_socket] = client_address
@@ -526,6 +527,7 @@ def main(args: list[str]) -> None:
     config(args)
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     server_address = ("localhost", server_port)
     server_socket.bind(server_address)
     server_socket.setblocking(False)
