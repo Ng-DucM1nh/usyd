@@ -517,11 +517,12 @@ sockets_list: list[socket.socket] = []
 clients: dict[socket.socket, str] = {}
 client_room: dict[socket.socket, str] = {}
 
-ROOMS_LIMIT: int = 2
+ROOMS_LIMIT: int = 256
 
 def main(args: list[str]) -> None:
     config(args)
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_address = ("localhost", server_port)
     server_socket.bind(server_address)
     server_socket.setblocking(False)
