@@ -119,7 +119,7 @@ class Room:
         client_room.pop(p1_client_socket)
         client_room.pop(p2_client_socket)
         for viewer_client_socket in self.viewers_client_socket:
-            client_room.pop(viewer_client_socket)
+            client_room.pop(viewer_client_socket, None)
         full_rooms.pop(self.room_name)
 
 pending_rooms: dict[str, Room] = {}
