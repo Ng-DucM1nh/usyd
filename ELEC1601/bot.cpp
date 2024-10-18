@@ -39,8 +39,8 @@ void loop()
 {
   
   Rvalue = irDetect(2, 38000);
-  Lvalue = irDetect(1, 38000);
-  Mvalue = irDetect(0, 38600); // try to detect a wall with distance <= 9cm
+  Lvalue = irDetect(1, 37700);
+  Mvalue = irDetect(0, 38500); // try to detect a wall with distance <= 9cm
   if (Mvalue == 1 && Rvalue == 1 && Lvalue == 1){
     while (1){
       Stop();
@@ -73,9 +73,8 @@ void loop()
   digitalWrite(MredLedPin, LOW);
   
   
-  int MDetect = irDetect(0, 38000);
-  int LDetect = irDetect(1, 39400);
-  int RDetect = irDetect(2, 42100);
+  int LDetect = irDetect(1, 41200);
+  int RDetect = irDetect(2, 42700);
   if (LDetect == 1 || RDetect == 1){
     int l = LDetect;
     int r = RDetect;
@@ -114,8 +113,8 @@ void Lturn(int time)
 
 void Forward()
 {
-  Rservo.writeMicroseconds(1390);
-  Lservo.writeMicroseconds(1630);
+  Rservo.writeMicroseconds(1340);
+  Lservo.writeMicroseconds(1680);
   delay(100);
 }
 
