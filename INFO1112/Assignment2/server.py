@@ -122,14 +122,14 @@ class Room:
             client_room.pop(viewer_client_socket, None)
         full_rooms.pop(self.room_name)
 
-pending_rooms: dict[str, Room] = {}
-full_rooms: dict[str, Room] = {}
+pending_rooms: dict[str, Room] = {} # [room_name, room_object] : stores rooms with insufficient players
+full_rooms: dict[str, Room] = {} # [room_name, room_object] : stores rooms with 2 players
 
 
 server_port: int = 0
 user_database_path: str = ""
 user_database: list[dict] = []
-existing_username: set = set()
+existing_username: set = set() # stores every already-existing usernames
 
 
 def config(args: list[str]) -> None:
@@ -159,7 +159,6 @@ def config(args: list[str]) -> None:
     if len(missing_key) > 0:
         sys.stderr.write("Error: <server config path> missing key(s): ")
         for i, key in enumerate(missing_key):
-            sys.stderr.write(missing_key[i])
             sys.stderr.write(key)
             if i < len(missing_key)-1:
                 sys.stderr.write(", ")
@@ -171,10 +170,10 @@ def config(args: list[str]) -> None:
     try:
         server_port = int(server_port)
     except:
-        sys.stderr.write("Error: port number out of range")
+        sys.stderr.write("Error: port number out of range\n")
         sys.exit(1)
     if server_port < 1024 or server_port > 65535:
-        sys.stderr.write("Error: port number out of range")
+        sys.stderr.write("Error: port number out of range\n")
         sys.exit(1)
     user_database_path = data["userDatabase"]
     user_database_path = os.path.expanduser(user_database_path)
@@ -222,9 +221,6 @@ def remove_client_socket(client_socket: socket.socket) -> None:
     print(f"disconnection from {clients[client_socket]}")
     if client_socket in client_room:
         room_name = client_room[client_socket]
-        # if room_name in pending_rooms:
-        #     p1_username = room.get_player1()[0]
-        #     gameend_protocol
         if room_name in full_rooms:
             room = full_rooms[room_name]
             p1_username = room.get_player1()[0]
@@ -518,10 +514,10 @@ def process_message(client_socket: socket.socket) -> bool:
     return True
 
 
-auth_clients: dict[socket.socket, str] = {}
-sockets_list: list[socket.socket] = []
-clients: dict[socket.socket, str] = {}
-client_room: dict[socket.socket, str] = {}
+auth_clients: dict[socket.socket, str] = {} # [socket_object, client_username] : store the username of clients who logged in
+sockets_list: list[socket.socket] = [] # store the list of socket objects that we are handling
+clients: dict[socket.socket, str] = {} # [socket_object, client_address] : store the address of all clients
+client_room: dict[socket.socket, str] = {} # [socket_object, client' room name] : store the room name of which the client is in
 
 ROOMS_LIMIT: int = 256
 
