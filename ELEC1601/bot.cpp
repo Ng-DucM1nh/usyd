@@ -38,9 +38,9 @@ void setup()
 void loop()
 {
   
-  Rvalue = irDetect(2, 38000);
-  Lvalue = irDetect(1, 37700);
-  Mvalue = irDetect(0, 38500); // try to detect a wall with distance <= 9cm
+  Rvalue = irDetect(2, 38094);
+  Lvalue = irDetect(1, 37600);
+  Mvalue = irDetect(0, 39583); // try to detect a wall with distance <= 9cm
   if (Mvalue == 1 && Rvalue == 1 && Lvalue == 1){
     while (1){
       Stop();
@@ -51,12 +51,14 @@ void loop()
     Serial.println("front wall");
     if (Rvalue == 0) {
       //Opening on Right wall --> Right turn
-      Rturn(850);
+      preRturn(600);
+      Rturn(150);
       Serial.println("turning right");
-    }  
-    //Opening on Left wall --> Left turn
+    }
     else if (Lvalue==0) {
-      Lturn(850);
+      //Opening on Left wall --> Left turn
+      preLturn(600);
+      Lturn(150);
       Serial.println("turning left");
     }
     else{
@@ -73,20 +75,20 @@ void loop()
   digitalWrite(MredLedPin, LOW);
   
   
-  int LDetect = irDetect(1, 41200);
-  int RDetect = irDetect(2, 42700);
+  int LDetect = irDetect(1, 39995);
+  int RDetect = irDetect(2, 41522);
   if (LDetect == 1 || RDetect == 1){
     int l = LDetect;
     int r = RDetect;
     if (r == 1 && l == 0){
       // right wall is closer
       Serial.println("right wall closer");
-      Lturn(70);
+      Lturn(30);
     }
     else if (l == 1 && r == 0){
       // left wall is closer
       Serial.println("left wall closer");
-      Rturn(70);
+      Rturn(30);
     }
   }
 
@@ -96,15 +98,28 @@ void loop()
   
 }
 
-// time = 900 -> turn 90 degree
 void Rturn(int time)
+{
+  Rservo.writeMicroseconds(1680);
+  Lservo.writeMicroseconds(1680);
+  delay(time);
+}
+
+void Lturn(int time)
+{
+  Rservo.writeMicroseconds(1340);
+  Lservo.writeMicroseconds(1340);
+  delay(time);
+}
+
+void preRturn(int time)
 {
   Rservo.writeMicroseconds(1495);
   Lservo.writeMicroseconds(1680);
   delay(time);
 }
 
-void Lturn(int time)
+void preLturn(int time)
 {
   Rservo.writeMicroseconds(1370);
   Lservo.writeMicroseconds(1490);
